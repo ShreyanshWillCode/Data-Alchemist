@@ -10,13 +10,6 @@ import { Search, Filter, Plus, Download, Settings, FileDown, Upload, FileText, W
 // AI SERVICE TYPES AND INTERFACES
 // ============================================================================
 
-/** AI service response structure */
-interface AIResponse {
-  success: boolean;
-  data?: any;
-  error?: string;
-}
-
 /** Natural language modification command structure */
 interface ModificationCommand {
   action: 'update' | 'set' | 'change';
@@ -61,7 +54,7 @@ class AIService {
   /**
    * Parse natural language modification commands
    */
-  static async parseModificationCommand(command: string, datasets: Record<DatasetType, DataRow[]>): Promise<ModificationCommand | null> {
+  static async parseModificationCommand(command: string): Promise<ModificationCommand | null> {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
     
@@ -242,7 +235,7 @@ class AIService {
   /**
    * Suggest corrections for validation errors
    */
-  static async suggestCorrections(error: string, row: DataRow, datasetType: DatasetType): Promise<string | null> {
+  static async suggestCorrections(error: string, row: DataRow): Promise<string | null> {
     await new Promise(resolve => setTimeout(resolve, 300));
     
     // Fix malformed JSON
@@ -841,7 +834,7 @@ function NaturalLanguageModifier({
     setPreview(null);
     
     try {
-      const parsedCommand = await AIService.parseModificationCommand(command, datasets);
+      const parsedCommand = await AIService.parseModificationCommand(command);
       
       if (!parsedCommand) {
         setError("Could not understand the command. Try: 'Change all PriorityLevels to 5' or 'Set MaxLoadPerPhase to 2 for GroupB workers'");
@@ -892,7 +885,7 @@ function NaturalLanguageModifier({
         preview: previewData
       });
       
-    } catch (err) {
+    } catch {
       setError("Failed to process command. Please try again.");
     } finally {
       setIsProcessing(false);
@@ -1344,12 +1337,10 @@ function AIRuleRecommendations({
 function AIErrorCorrection({ 
   errors, 
   data, 
-  datasetType, 
   onDataChange 
 }: { 
   errors: string[];
   data: DataRow[];
-  datasetType: DatasetType;
   onDataChange: (rows: DataRow[]) => void;
 }) {
   const [corrections, setCorrections] = useState<Map<number, string>>(new Map());
@@ -1368,7 +1359,7 @@ function AIErrorCorrection({
         if (rowMatch) {
           const rowIndex = parseInt(rowMatch[1]) - 1;
           if (rowIndex >= 0 && rowIndex < data.length) {
-            const correction = await AIService.suggestCorrections(error, data[rowIndex], datasetType);
+            const correction = await AIService.suggestCorrections(error, data[rowIndex]);
             if (correction) {
               newCorrections.set(i, correction);
             }
@@ -1381,7 +1372,7 @@ function AIErrorCorrection({
     } finally {
       setIsProcessing(false);
     }
-  }, [errors, data, datasetType]);
+  }, [errors, data]);
 
   const applyCorrection = useCallback((errorIndex: number, correction: string) => {
     const error = errors[errorIndex];
@@ -1679,7 +1670,6 @@ export default function DataAlchemistApp() {
               <AIErrorCorrection 
                 errors={validationErrors[key] || []}
                 data={datasets[key] || []}
-                datasetType={key}
                 onDataChange={(rows) => handleAICorrection(key, rows)}
               />
             </div>
