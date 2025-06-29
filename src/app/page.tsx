@@ -4,7 +4,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { DataGrid, type Column } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
-import { Search, Filter, Plus, Download, Settings, FileDown } from "lucide-react";
+import { Search, Filter, Plus, Download, Settings, FileDown, Upload, FileText } from "lucide-react";
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -376,28 +376,106 @@ function validateDataset(datasetType: DatasetType, data: DataRow[]): string[] {
 // ============================================================================
 
 /**
- * File upload component with drag-and-drop support
+ * File upload component with drag-and-drop support and file icon
  */
 function FileUpload({ label, onDataParsed }: { 
   label: string; 
   onDataParsed: (data: DataRow[]) => void;
 }) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       parseUploadedFile(file, onDataParsed);
     }
   }, [onDataParsed]);
 
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
+        setSelectedFile(file);
+        parseUploadedFile(file, onDataParsed);
+      }
+    }
+  }, [onDataParsed]);
+
+  const handleFileInputClick = useCallback(() => {
+    const fileInput = document.getElementById(`file-input-${label.toLowerCase()}`) as HTMLInputElement;
+    fileInput?.click();
+  }, [label]);
+
   return (
-    <div className="flex flex-col gap-2 items-start">
-      <label className="font-semibold">{label} (.csv or .xlsx)</label>
-      <input
-        type="file"
-        accept=".csv,.xlsx"
-        onChange={handleFileChange}
-        className="file-input file-input-bordered file-input-sm w-full max-w-xs"
-      />
+    <div className="flex flex-col gap-3">
+      <label className="font-semibold text-gray-700">{label}</label>
+      
+      <div
+        className={`
+          relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200
+          ${isDragOver 
+            ? 'border-blue-400 bg-blue-50' 
+            : selectedFile 
+              ? 'border-green-400 bg-green-50' 
+              : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
+          }
+        `}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={handleFileInputClick}
+      >
+        <input
+          id={`file-input-${label.toLowerCase()}`}
+          type="file"
+          accept=".csv,.xlsx"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        
+        <div className="flex flex-col items-center gap-3">
+          {selectedFile ? (
+            <>
+              <div className="flex items-center gap-2 text-green-600">
+                <FileText className="w-8 h-8" />
+                <span className="font-medium">File Selected</span>
+              </div>
+              <div className="text-sm text-gray-600 max-w-full truncate">
+                {selectedFile.name}
+              </div>
+              <div className="text-xs text-gray-500">
+                {(selectedFile.size / 1024).toFixed(1)} KB
+              </div>
+            </>
+          ) : (
+            <>
+              <Upload className="w-8 h-8 text-gray-400" />
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">Click to upload</span> or drag and drop
+              </div>
+              <div className="text-xs text-gray-500">
+                CSV or XLSX files only
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
