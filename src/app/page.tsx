@@ -4,7 +4,276 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { DataGrid, type Column } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
-import { Search, Filter, Plus, Download, Settings, FileDown, Upload, FileText } from "lucide-react";
+import { Search, Filter, Plus, Download, Settings, FileDown, Upload, FileText, Wand2, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+
+// ============================================================================
+// AI SERVICE TYPES AND INTERFACES
+// ============================================================================
+
+/** AI service response structure */
+interface AIResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
+/** Natural language modification command structure */
+interface ModificationCommand {
+  action: 'update' | 'set' | 'change';
+  field: string;
+  value: string | number;
+  condition?: {
+    field: string;
+    operator: 'equals' | 'contains' | 'greater' | 'less';
+    value: string | number;
+  };
+  dataset: DatasetType;
+}
+
+/** AI rule recommendation structure */
+interface RuleRecommendation {
+  id: string;
+  type: string;
+  description: string;
+  confidence: number;
+  reasoning: string;
+  suggestedParameters: Record<string, unknown>;
+}
+
+/** AI validation insight structure */
+interface ValidationInsight {
+  type: 'warning' | 'error' | 'info';
+  message: string;
+  field?: string;
+  rowIndex?: number;
+  suggestedFix?: string;
+}
+
+// ============================================================================
+// AI SERVICE STUB (Replace with actual OpenAI API calls)
+// ============================================================================
+
+/**
+ * AI service for natural language processing and data analysis
+ * This is a stub implementation - replace with actual OpenAI API calls
+ */
+class AIService {
+  /**
+   * Parse natural language modification commands
+   */
+  static async parseModificationCommand(command: string, datasets: Record<DatasetType, DataRow[]>): Promise<ModificationCommand | null> {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const lowerCommand = command.toLowerCase();
+    
+    // Parse "Change all PriorityLevels to 5"
+    const priorityMatch = lowerCommand.match(/change\s+all\s+prioritylevels?\s+to\s+(\d+)/i);
+    if (priorityMatch) {
+      return {
+        action: 'change',
+        field: 'PriorityLevel',
+        value: parseInt(priorityMatch[1]),
+        dataset: 'clients'
+      };
+    }
+    
+    // Parse "Set MaxLoadPerPhase to 2 for GroupB workers"
+    const loadMatch = lowerCommand.match(/set\s+maxloadperphase\s+to\s+(\d+)\s+for\s+(\w+)\s+workers?/i);
+    if (loadMatch) {
+      return {
+        action: 'set',
+        field: 'MaxLoadPerPhase',
+        value: parseInt(loadMatch[1]),
+        condition: {
+          field: 'WorkerGroup',
+          operator: 'equals',
+          value: loadMatch[2]
+        },
+        dataset: 'workers'
+      };
+    }
+    
+    // Parse "Update all GroupA clients priority to 4"
+    const groupMatch = lowerCommand.match(/update\s+all\s+(\w+)\s+clients?\s+priority\s+to\s+(\d+)/i);
+    if (groupMatch) {
+      return {
+        action: 'update',
+        field: 'PriorityLevel',
+        value: parseInt(groupMatch[2]),
+        condition: {
+          field: 'GroupTag',
+          operator: 'equals',
+          value: groupMatch[1]
+        },
+        dataset: 'clients'
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Generate rule recommendations based on data patterns
+   */
+  static async generateRuleRecommendations(datasets: Record<DatasetType, DataRow[]>): Promise<RuleRecommendation[]> {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const recommendations: RuleRecommendation[] = [];
+    
+    // Analyze task co-occurrence patterns
+    const clients = datasets.clients || [];
+    const taskCooccurrence = new Map<string, number>();
+    
+    clients.forEach(client => {
+      const taskIds = String(client.RequestedTaskIDs || '').split(',').filter(Boolean);
+      for (let i = 0; i < taskIds.length; i++) {
+        for (let j = i + 1; j < taskIds.length; j++) {
+          const pair = `${taskIds[i]}-${taskIds[j]}`;
+          taskCooccurrence.set(pair, (taskCooccurrence.get(pair) || 0) + 1);
+        }
+      }
+    });
+    
+    // Find most common task pairs
+    const sortedPairs = Array.from(taskCooccurrence.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    
+    sortedPairs.forEach(([pair, count]) => {
+      if (count >= 2) {
+        const [task1, task2] = pair.split('-');
+        recommendations.push({
+          id: `coRun-${task1}-${task2}`,
+          type: 'coRun',
+          description: `Tasks ${task1} and ${task2} often co-occur (${count} times)`,
+          confidence: Math.min(count / 5, 0.9),
+          reasoning: `Found ${count} clients requesting both tasks together`,
+          suggestedParameters: { taskIds: [task1, task2] }
+        });
+      }
+    });
+    
+    // Analyze worker load patterns
+    const workers = datasets.workers || [];
+    const groupLoads = new Map<string, { total: number; count: number }>();
+    
+    workers.forEach(worker => {
+      const group = String(worker.WorkerGroup || '');
+      const load = Number(worker.MaxLoadPerPhase || 0);
+      const current = groupLoads.get(group) || { total: 0, count: 0 };
+      current.total += load;
+      current.count += 1;
+      groupLoads.set(group, current);
+    });
+    
+    groupLoads.forEach((stats, group) => {
+      const avgLoad = stats.total / stats.count;
+      if (avgLoad > 3) {
+        recommendations.push({
+          id: `loadLimit-${group}`,
+          type: 'loadLimit',
+          description: `${group} workers have high average load (${avgLoad.toFixed(1)})`,
+          confidence: 0.8,
+          reasoning: `Average MaxLoadPerPhase for ${group} is ${avgLoad.toFixed(1)}, suggesting potential overload`,
+          suggestedParameters: { group, maxLoad: Math.floor(avgLoad * 0.8) }
+        });
+      }
+    });
+    
+    return recommendations;
+  }
+
+  /**
+   * Generate AI-based validation insights
+   */
+  static async generateValidationInsights(datasets: Record<DatasetType, DataRow[]>): Promise<ValidationInsight[]> {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    const insights: ValidationInsight[] = [];
+    
+    // Analyze priority distribution
+    const clients = datasets.clients || [];
+    const priorities = clients.map(c => Number(c.PriorityLevel)).filter(p => !isNaN(p));
+    
+    if (priorities.length > 0) {
+      const avgPriority = priorities.reduce((a, b) => a + b, 0) / priorities.length;
+      const priorityVariance = priorities.reduce((sum, p) => sum + Math.pow(p - avgPriority, 2), 0) / priorities.length;
+      
+      if (priorityVariance < 0.5) {
+        insights.push({
+          type: 'warning',
+          message: `Low priority variance detected. Most clients have similar priority levels (avg: ${avgPriority.toFixed(1)})`,
+          suggestedFix: 'Consider diversifying priority levels for better resource allocation'
+        });
+      }
+    }
+    
+    // Check for skill gaps
+    const workers = datasets.workers || [];
+    const tasks = datasets.tasks || [];
+    
+    const workerSkills = new Set<string>();
+    workers.forEach(w => {
+      String(w.Skills || '').split(',').forEach(skill => {
+        if (skill.trim()) workerSkills.add(skill.trim().toLowerCase());
+      });
+    });
+    
+    const requiredSkills = new Set<string>();
+    tasks.forEach(t => {
+      String(t.RequiredSkills || '').split(',').forEach(skill => {
+        if (skill.trim()) requiredSkills.add(skill.trim().toLowerCase());
+      });
+    });
+    
+    const missingSkills = Array.from(requiredSkills).filter(skill => !workerSkills.has(skill));
+    if (missingSkills.length > 0) {
+      insights.push({
+        type: 'error',
+        message: `Missing worker skills: ${missingSkills.join(', ')}`,
+        suggestedFix: `Add workers with skills: ${missingSkills.join(', ')}`
+      });
+    }
+    
+    return insights;
+  }
+
+  /**
+   * Suggest corrections for validation errors
+   */
+  static async suggestCorrections(error: string, row: DataRow, datasetType: DatasetType): Promise<string | null> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Fix malformed JSON
+    if (error.includes('Invalid JSON')) {
+      const attributes = String(row.AttributesJSON || '');
+      if (attributes && attributes !== 'INVALID_JSON') {
+        try {
+          // Try to fix common JSON issues
+          const fixed = attributes
+            .replace(/(\w+):/g, '"$1":') // Add quotes to keys
+            .replace(/'/g, '"'); // Replace single quotes with double quotes
+          JSON.parse(fixed);
+          return fixed;
+        } catch {
+          return '{}'; // Return empty object if can't fix
+        }
+      }
+    }
+    
+    // Fix unknown TaskIDs
+    if (error.includes('RequestedTaskIDs')) {
+      const taskIds = String(row.RequestedTaskIDs || '');
+      const validTaskIds = taskIds.split(',').filter(id => id.trim().startsWith('T'));
+      if (validTaskIds.length > 0) {
+        return validTaskIds.join(',');
+      }
+    }
+    
+    return null;
+  }
+}
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -81,19 +350,19 @@ function parseNaturalLanguageQuery(query: string, data: DataRow[]): DataRow[] {
   const searchPatterns = [
     {
       pattern: /priority\s*>\s*(\d+)/,
-      filter: (value: number) => (row: DataRow) => Number(row.PriorityLevel) > value
+      filter: (value: string) => (row: DataRow) => Number(row.PriorityLevel) > parseInt(value)
     },
     {
       pattern: /priority\s*<\s*(\d+)/,
-      filter: (value: number) => (row: DataRow) => Number(row.PriorityLevel) < value
+      filter: (value: string) => (row: DataRow) => Number(row.PriorityLevel) < parseInt(value)
     },
     {
       pattern: /duration\s*>\s*(\d+)/,
-      filter: (value: number) => (row: DataRow) => Number(row.Duration) > value
+      filter: (value: string) => (row: DataRow) => Number(row.Duration) > parseInt(value)
     },
     {
       pattern: /duration\s*<\s*(\d+)/,
-      filter: (value: number) => (row: DataRow) => Number(row.Duration) < value
+      filter: (value: string) => (row: DataRow) => Number(row.Duration) < parseInt(value)
     },
     {
       pattern: /group\s*=\s*(\w+)/,
@@ -111,7 +380,7 @@ function parseNaturalLanguageQuery(query: string, data: DataRow[]): DataRow[] {
   for (const { pattern, filter } of searchPatterns) {
     const match = lowerQuery.match(pattern);
     if (match) {
-      filters.push(filter(parseInt(match[1])));
+      filters.push(filter(match[1]));
       break; // Use first matching pattern
     }
   }
@@ -546,6 +815,185 @@ function SearchBar({ onSearch }: { onSearch: (query: string) => void }) {
 }
 
 /**
+ * Natural language data modification component
+ */
+function NaturalLanguageModifier({ 
+  datasets, 
+  onDataChange 
+}: { 
+  datasets: Record<DatasetType, DataRow[]>;
+  onDataChange: (datasetType: DatasetType, rows: DataRow[]) => void;
+}) {
+  const [command, setCommand] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [preview, setPreview] = useState<{
+    command: ModificationCommand;
+    affectedRows: number;
+    preview: DataRow[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCommandSubmit = useCallback(async () => {
+    if (!command.trim()) return;
+    
+    setIsProcessing(true);
+    setError(null);
+    setPreview(null);
+    
+    try {
+      const parsedCommand = await AIService.parseModificationCommand(command, datasets);
+      
+      if (!parsedCommand) {
+        setError("Could not understand the command. Try: 'Change all PriorityLevels to 5' or 'Set MaxLoadPerPhase to 2 for GroupB workers'");
+        return;
+      }
+      
+      // Generate preview
+      const currentData = datasets[parsedCommand.dataset] || [];
+      const previewData = currentData.map(row => {
+        const newRow = { ...row };
+        
+        // Check if row matches condition
+        let shouldUpdate = true;
+        if (parsedCommand.condition) {
+          const { field, operator, value } = parsedCommand.condition;
+          const rowValue = row[field];
+          
+          switch (operator) {
+            case 'equals':
+              shouldUpdate = String(rowValue) === String(value);
+              break;
+            case 'contains':
+              shouldUpdate = String(rowValue).toLowerCase().includes(String(value).toLowerCase());
+              break;
+            case 'greater':
+              shouldUpdate = Number(rowValue) > Number(value);
+              break;
+            case 'less':
+              shouldUpdate = Number(rowValue) < Number(value);
+              break;
+          }
+        }
+        
+        if (shouldUpdate) {
+          newRow[parsedCommand.field] = parsedCommand.value;
+        }
+        
+        return newRow;
+      });
+      
+      const affectedRows = previewData.filter((row, index) => 
+        JSON.stringify(row) !== JSON.stringify(currentData[index])
+      ).length;
+      
+      setPreview({
+        command: parsedCommand,
+        affectedRows,
+        preview: previewData
+      });
+      
+    } catch (err) {
+      setError("Failed to process command. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [command, datasets]);
+
+  const applyChanges = useCallback(() => {
+    if (!preview) return;
+    
+    onDataChange(preview.command.dataset, preview.preview);
+    setCommand("");
+    setPreview(null);
+    setError(null);
+  }, [preview, onDataChange]);
+
+  const cancelPreview = useCallback(() => {
+    setPreview(null);
+    setError(null);
+  }, []);
+
+  return (
+    <div className="bg-white/90 rounded-lg shadow p-4">
+      <h3 className="font-semibold mb-4 flex items-center gap-2">
+        <Wand2 className="w-4 h-4" />
+        Natural Language Modifier
+      </h3>
+      
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Try: 'Change all PriorityLevels to 5' or 'Set MaxLoadPerPhase to 2 for GroupB workers'"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleCommandSubmit()}
+            className="flex-1 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={isProcessing}
+          />
+          <button
+            onClick={handleCommandSubmit}
+            disabled={isProcessing || !command.trim()}
+            className="px-4 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+          >
+            {isProcessing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Wand2 className="w-4 h-4" />
+                Apply
+              </>
+            )}
+          </button>
+        </div>
+        
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-100 border border-red-300 text-red-700 rounded text-sm">
+            <AlertTriangle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
+        
+        {preview && (
+          <div className="border border-blue-300 bg-blue-50 rounded p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-medium text-blue-800">Preview Changes</h4>
+              <div className="flex gap-2">
+                <button
+                  onClick={cancelPreview}
+                  className="px-3 py-1 text-blue-600 hover:bg-blue-100 rounded text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={applyChanges}
+                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors flex items-center gap-1"
+                >
+                  <CheckCircle className="w-3 h-3" />
+                  Apply Changes ({preview.affectedRows} rows)
+                </button>
+              </div>
+            </div>
+            
+            <div className="text-sm text-blue-700">
+              <p><strong>Action:</strong> {preview.command.action} {preview.command.field} to {preview.command.value}</p>
+              {preview.command.condition && (
+                <p><strong>Condition:</strong> {preview.command.condition.field} {preview.command.condition.operator} {preview.command.condition.value}</p>
+              )}
+              <p><strong>Dataset:</strong> {preview.command.dataset}</p>
+              <p><strong>Affected Rows:</strong> {preview.affectedRows}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Prioritization weights configuration panel
  */
 function PrioritizationPanel({ weights, onWeightsChange }: {
@@ -617,7 +1065,11 @@ function RulesBuilder({ onExport }: { onExport: (rules: RulesExport) => void }) 
   const exportRules = useCallback(() => {
     const rulesExport: RulesExport = {
       version: "1.0",
-      rules: rules.map(({ id, ...rule }) => rule),
+      rules: rules.map(rule => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, ...ruleWithoutId } = rule;
+        return ruleWithoutId;
+      }),
       metadata: {
         createdAt: new Date().toISOString(),
         totalRules: rules.length
@@ -726,10 +1178,10 @@ function FinalExport({ datasets, rules, weights }: {
     // Export rules.json
     const rulesBlob = new Blob([JSON.stringify(rules, null, 2)], { type: 'application/json' });
     const rulesUrl = URL.createObjectURL(rulesBlob);
-    const rulesLink = document.createElement('a');
-    rulesLink.href = rulesUrl;
-    rulesLink.download = 'rules.json';
-    rulesLink.click();
+    const link = document.createElement('a');
+    link.href = rulesUrl;
+    link.download = 'rules.json';
+    link.click();
     URL.revokeObjectURL(rulesUrl);
 
     // Export prioritization.json
@@ -762,6 +1214,350 @@ function FinalExport({ datasets, rules, weights }: {
       
       <div className="text-xs text-gray-600 mt-2">
         Downloads: clients.csv, workers.csv, tasks.csv, rules.json, prioritization.json
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AI Rule Recommendations component
+ */
+function AIRuleRecommendations({ 
+  datasets, 
+  onAddRule 
+}: { 
+  datasets: Record<DatasetType, DataRow[]>;
+  onAddRule: (rule: Omit<Rule, 'id'>) => void;
+}) {
+  const [recommendations, setRecommendations] = useState<RuleRecommendation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  const generateRecommendations = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const newRecommendations = await AIService.generateRuleRecommendations(datasets);
+      setRecommendations(newRecommendations);
+      setIsVisible(true);
+    } catch (error) {
+      console.error('Failed to generate recommendations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [datasets]);
+
+  const acceptRecommendation = useCallback((recommendation: RuleRecommendation) => {
+    const newRule: Omit<Rule, 'id'> = {
+      type: recommendation.type,
+      description: recommendation.description,
+      parameters: recommendation.suggestedParameters
+    };
+    onAddRule(newRule);
+    
+    // Remove the accepted recommendation
+    setRecommendations(prev => prev.filter(r => r.id !== recommendation.id));
+  }, [onAddRule]);
+
+  const ignoreRecommendation = useCallback((id: string) => {
+    setRecommendations(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const hasData = Object.values(datasets).some(data => data.length > 0);
+
+  return (
+    <div className="bg-white/90 rounded-lg shadow p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Wand2 className="w-4 h-4" />
+          AI Rule Recommendations
+        </h3>
+        <button
+          onClick={generateRecommendations}
+          disabled={isLoading || !hasData}
+          className="px-3 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+        >
+          {isLoading ? (
+            <>
+              <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-3 h-3" />
+              Smart Scan
+            </>
+          )}
+        </button>
+      </div>
+      
+      {isVisible && recommendations.length === 0 && !isLoading && (
+        <div className="text-center text-gray-500 text-sm py-4">
+          No patterns detected for rule recommendations
+        </div>
+      )}
+      
+      <div className="space-y-3 max-h-64 overflow-y-auto">
+        {recommendations.map(recommendation => (
+          <div key={recommendation.id} className="border border-gray-200 rounded p-3 bg-gray-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm text-purple-600">
+                  {recommendation.type}
+                </div>
+                <div className="text-gray-700 text-sm mt-1">
+                  {recommendation.description}
+                </div>
+                <div className="text-gray-500 text-xs mt-1">
+                  {recommendation.reasoning}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  Confidence: {(recommendation.confidence * 100).toFixed(0)}%
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => acceptRecommendation(recommendation)}
+                  className="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors flex items-center gap-1"
+                >
+                  <CheckCircle className="w-3 h-3" />
+                  Accept
+                </button>
+                <button
+                  onClick={() => ignoreRecommendation(recommendation.id)}
+                  className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600 transition-colors flex items-center gap-1"
+                >
+                  <XCircle className="w-3 h-3" />
+                  Ignore
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AI-based Error Correction component
+ */
+function AIErrorCorrection({ 
+  errors, 
+  data, 
+  datasetType, 
+  onDataChange 
+}: { 
+  errors: string[];
+  data: DataRow[];
+  datasetType: DatasetType;
+  onDataChange: (rows: DataRow[]) => void;
+}) {
+  const [corrections, setCorrections] = useState<Map<number, string>>(new Map());
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const generateCorrections = useCallback(async () => {
+    if (errors.length === 0) return;
+    
+    setIsProcessing(true);
+    const newCorrections = new Map<number, string>();
+    
+    try {
+      for (let i = 0; i < errors.length; i++) {
+        const error = errors[i];
+        const rowMatch = error.match(/Row (\d+):/);
+        if (rowMatch) {
+          const rowIndex = parseInt(rowMatch[1]) - 1;
+          if (rowIndex >= 0 && rowIndex < data.length) {
+            const correction = await AIService.suggestCorrections(error, data[rowIndex], datasetType);
+            if (correction) {
+              newCorrections.set(i, correction);
+            }
+          }
+        }
+      }
+      setCorrections(newCorrections);
+    } catch (error) {
+      console.error('Failed to generate corrections:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [errors, data, datasetType]);
+
+  const applyCorrection = useCallback((errorIndex: number, correction: string) => {
+    const error = errors[errorIndex];
+    const rowMatch = error.match(/Row (\d+):/);
+    if (rowMatch) {
+      const rowIndex = parseInt(rowMatch[1]) - 1;
+      if (rowIndex >= 0 && rowIndex < data.length) {
+        const newData = [...data];
+        const newRow = { ...newData[rowIndex] };
+        
+        // Apply the correction based on error type
+        if (error.includes('AttributesJSON')) {
+          newRow.AttributesJSON = correction;
+        } else if (error.includes('RequestedTaskIDs')) {
+          newRow.RequestedTaskIDs = correction;
+        }
+        
+        newData[rowIndex] = newRow;
+        onDataChange(newData);
+        
+        // Remove the correction from the map
+        setCorrections(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(errorIndex);
+          return newMap;
+        });
+      }
+    }
+  }, [errors, data, onDataChange]);
+
+  if (errors.length === 0) return null;
+
+  return (
+    <div className="bg-white/90 rounded-lg shadow p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Wand2 className="w-4 h-4" />
+          AI Error Correction
+        </h3>
+        <button
+          onClick={generateCorrections}
+          disabled={isProcessing}
+          className="px-3 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+        >
+          {isProcessing ? (
+            <>
+              <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-3 h-3" />
+              Auto-Fix
+            </>
+          )}
+        </button>
+      </div>
+      
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {errors.map((error, index) => (
+          <div key={index} className="border border-red-200 rounded p-2 bg-red-50">
+            <div className="text-red-700 text-sm mb-1">{error}</div>
+            {corrections.has(index) && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600">Suggested fix:</span>
+                <code className="text-xs bg-green-100 px-1 rounded">{corrections.get(index)}</code>
+                <button
+                  onClick={() => applyCorrection(index, corrections.get(index)!)}
+                  className="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors flex items-center gap-1"
+                >
+                  <CheckCircle className="w-3 h-3" />
+                  Apply
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AI Validator component for smart data analysis
+ */
+function AIValidator({ 
+  datasets 
+}: { 
+  datasets: Record<DatasetType, DataRow[]>;
+}) {
+  const [insights, setInsights] = useState<ValidationInsight[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  const runSmartScan = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const newInsights = await AIService.generateValidationInsights(datasets);
+      setInsights(newInsights);
+      setIsVisible(true);
+    } catch (error) {
+      console.error('Failed to generate insights:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [datasets]);
+
+  const hasData = Object.values(datasets).some(data => data.length > 0);
+
+  const getInsightIcon = (type: ValidationInsight['type']) => {
+    switch (type) {
+      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+      case 'error': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'info': return <CheckCircle className="w-4 h-4 text-blue-500" />;
+    }
+  };
+
+  const getInsightColor = (type: ValidationInsight['type']) => {
+    switch (type) {
+      case 'warning': return 'border-yellow-300 bg-yellow-50';
+      case 'error': return 'border-red-300 bg-red-50';
+      case 'info': return 'border-blue-300 bg-blue-50';
+    }
+  };
+
+  return (
+    <div className="bg-white/90 rounded-lg shadow p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Wand2 className="w-4 h-4" />
+          AI Smart Validator
+        </h3>
+        <button
+          onClick={runSmartScan}
+          disabled={isLoading || !hasData}
+          className="px-3 py-1 bg-indigo-500 text-white rounded text-sm hover:bg-indigo-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+        >
+          {isLoading ? (
+            <>
+              <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+              Scanning...
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-3 h-3" />
+              Smart Scan
+            </>
+          )}
+        </button>
+      </div>
+      
+      {isVisible && insights.length === 0 && !isLoading && (
+        <div className="text-center text-gray-500 text-sm py-4">
+          No insights detected - data looks good!
+        </div>
+      )}
+      
+      <div className="space-y-3 max-h-64 overflow-y-auto">
+        {insights.map((insight, index) => (
+          <div key={index} className={`border rounded p-3 ${getInsightColor(insight.type)}`}>
+            <div className="flex items-start gap-2">
+              {getInsightIcon(insight.type)}
+              <div className="flex-1">
+                <div className="text-sm font-medium">
+                  {insight.type.charAt(0).toUpperCase() + insight.type.slice(1)}
+                </div>
+                <div className="text-sm mt-1">{insight.message}</div>
+                {insight.suggestedFix && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <strong>Suggested:</strong> {insight.suggestedFix}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -842,6 +1638,21 @@ export default function DataAlchemistApp() {
     URL.revokeObjectURL(url);
   }, []);
 
+  const handleAddRule = useCallback((rule: Omit<Rule, 'id'>) => {
+    setCurrentRules(prev => ({
+      ...prev,
+      rules: [...prev.rules, rule],
+      metadata: {
+        ...prev.metadata,
+        totalRules: prev.rules.length + 1
+      }
+    }));
+  }, []);
+
+  const handleAICorrection = useCallback((datasetType: DatasetType, rows: DataRow[]) => {
+    handleDataChange(datasetType, rows);
+  }, [handleDataChange]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-sky-100 p-8 flex flex-col items-center gap-8">
       <h1 className="text-3xl font-bold mb-2">🧪 Data Alchemist</h1>
@@ -865,12 +1676,29 @@ export default function DataAlchemistApp() {
                 onDataChange={(rows) => handleDataChange(key, rows)}
               />
               <ValidationSummary errors={validationErrors[key] || []} />
+              <AIErrorCorrection 
+                errors={validationErrors[key] || []}
+                data={datasets[key] || []}
+                datasetType={key}
+                onDataChange={(rows) => handleAICorrection(key, rows)}
+              />
             </div>
           ))}
         </div>
         
         {/* Sidebar with configuration panels */}
         <div className="lg:col-span-1 space-y-6">
+          <NaturalLanguageModifier 
+            datasets={datasets}
+            onDataChange={handleDataChange}
+          />
+          <AIRuleRecommendations 
+            datasets={datasets}
+            onAddRule={handleAddRule}
+          />
+          <AIValidator 
+            datasets={datasets}
+          />
           <PrioritizationPanel 
             weights={prioritizationWeights}
             onWeightsChange={setPrioritizationWeights}
